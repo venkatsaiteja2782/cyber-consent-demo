@@ -16,7 +16,7 @@ def client_ip():
 
 @app.get("/")
 def recipient():
-    return send_from_directory("public", "recipient.html")
+    return send_from_directory(".", "recipient.html")
 
 def dashboard_auth():
     expected_user = os.environ.get("SENDER_USER", "")
