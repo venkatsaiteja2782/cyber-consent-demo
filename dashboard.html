@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sender Dashboard — Consent Demo</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0b1020;color:#eef2ff;margin:0;padding:24px}
+.wrap{max-width:1300px;margin:auto}.panel{background:#151c33;border:1px solid #303a61;border-radius:16px;padding:20px}
+table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}
+th,td{padding:10px;border-bottom:1px solid #303a61;text-align:left;vertical-align:top}
+small{color:#aeb7d4}.pill{padding:4px 8px;border-radius:999px;background:#243057}
+.snapshot{width:180px;max-height:160px;object-fit:contain;border-radius:10px;background:#050812}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="panel">
+<h1>Sender / Research Dashboard</h1>
+<p><small>In-memory demo data only. Refreshes every 2 seconds. Each displayed image is a single snapshot explicitly submitted after camera consent.</small></p>
+<table>
+<thead><tr><th>Time</th><th>IP</th><th>Location</th><th>Location consent</th><th>Camera consent</th><th>Snapshot</th><th>User agent</th></tr></thead>
+<tbody id="rows"></tbody>
+</table>
+</div>
+</div>
+<script>
+async function load(){
+ const r=await fetch("/api/events");
+ const data=await r.json();
+ document.getElementById("rows").innerHTML=data.slice().reverse().map(e=>{
+   const loc=e.location ? `${e.location.latitude}, ${e.location.longitude}<br><small>±${Math.round(e.location.accuracy||0)}m</small>` : "Not provided";
+   const img=e.camera_snapshot
+     ? `<img class="snapshot" src="${e.camera_snapshot}" alt="Consent-based camera snapshot">`
+     : "Not provided";
+   return `<tr>
+   <td>${new Date(e.timestamp).toLocaleString()}</td>
+   <td>${escapeHtml(e.ip)}</td>
+   <td>${loc}</td>
+   <td><span class="pill">${e.location_permission?"Yes":"No"}</span></td>
+   <td><span class="pill">${e.camera_permission?"Yes":"No"}</span></td>
+   <td>${img}</td>
+   <td>${escapeHtml(e.user_agent)}</td>
+   </tr>`;
+ }).join("");
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+load(); setInterval(load,2000);
+</script>
+</body>
+</html>

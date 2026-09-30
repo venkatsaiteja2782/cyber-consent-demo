@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cyber Consent Research Demo</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0b1020;color:#eef2ff;display:grid;place-items:center;min-height:100vh;margin:0}
+.card{width:min(680px,92vw);background:#151c33;border:1px solid #303a61;border-radius:18px;padding:28px;box-shadow:0 18px 60px #0008}
+h1{margin-top:0}.notice{background:#202a4a;padding:14px;border-radius:12px;line-height:1.5}
+button{border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer;margin:6px 4px 0 0}
+.primary{background:#6d7cff;color:white}.secondary{background:#2a3458;color:white}
+#video{width:100%;max-height:320px;border-radius:12px;background:#050812;margin-top:12px;display:none}
+.hidden{display:none}.ok{color:#72f1a8}.muted{color:#b8c0db}
+</style>
+</head>
+<body>
+<main class="card">
+<h1>🎁 Free Bitcoin — Research Simulation</h1>
+<p class="muted">This is an authorized cybersecurity/privacy research demo. No real cryptocurrency is distributed.</p>
+
+<div class="notice">
+<strong>What will happen if you consent:</strong>
+<ul>
+<li>Your browser may ask for <strong>location</strong> permission. If you allow it, your coordinates are sent to the research server.</li>
+<li>Your browser may ask for <strong>camera</strong> permission. If you allow it, a local preview appears.</li>
+<li>When you click <strong>Continue</strong>, <strong>one still camera snapshot</strong> will be captured and transmitted to the research server. No continuous video is uploaded.</li>
+<li>Your IP address is visible to the research server as part of the HTTP request.</li>
+</ul>
+</div>
+
+<p><label><input id="loc" type="checkbox"> I understand and consent to the location request.</label></p>
+<p><label><input id="cam" type="checkbox"> I understand and consent to one camera snapshot being sent to the research server.</label></p>
+
+<button class="primary" id="continue">Continue</button>
+<button class="secondary" id="deny">Decline</button>
+
+<video id="video" autoplay playsinline muted></video>
+<p id="status" class="muted"></p>
+
+<section id="finish" class="hidden">
+<h2 class="ok">Congratulations 🎉</h2>
+<p>You received the demo coins.</p>
+<p class="muted">The research flow is complete.</p>
+</section>
+</main>
+
+<script>
+const statusEl = document.getElementById("status");
+const video = document.getElementById("video");
+let stream = null;
+
+async function requestLocation() {
+  if (!document.getElementById("loc").checked) return null;
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      p => resolve({
+        latitude:p.coords.latitude,
+        longitude:p.coords.longitude,
+        accuracy:p.coords.accuracy
+      }),
+      () => resolve(null),
+      {enableHighAccuracy:false, timeout:10000, maximumAge:0}
+    );
+  });
+}
+
+async function requestCamera() {
+  if (!document.getElementById("cam").checked) return false;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video:true, audio:false});
+    video.srcObject = stream;
+    video.style.display = "block";
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function takeSnapshot() {
+  if (!stream || video.readyState < 2) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+document.getElementById("continue").onclick = async () => {
+  const locConsent = document.getElementById("loc").checked;
+  const camConsent = document.getElementById("cam").checked;
+
+  if (camConsent && !stream) {
+    statusEl.textContent = "Requesting camera permission…";
+    const ok = await requestCamera();
+    if (!ok) {
+      statusEl.textContent = "Camera permission was not granted. No snapshot was sent.";
+      return;
+    }
+  }
+
+  statusEl.textContent = "Preparing your consented research data…";
+  const location = await requestLocation();
+  const snapshot = camConsent ? takeSnapshot() : null;
+
+  if (camConsent && !snapshot) {
+    statusEl.textContent = "Could not capture a camera frame. No image was sent.";
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    return;
+  }
+
+  const response = await fetch("/api/consent", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      location,
+      location_permission: !!location,
+      camera_permission: camConsent && !!snapshot,
+      camera_snapshot: snapshot
+    })
+  });
+
+  if (!response.ok) {
+    statusEl.textContent = "The research server rejected the submission.";
+    return;
+  }
+
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  video.srcObject = null;
+  video.style.display = "none";
+
+  document.getElementById("finish").classList.remove("hidden");
+  statusEl.textContent = "";
+  document.getElementById("continue").disabled = true;
+};
+
+document.getElementById("deny").onclick = () => {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  document.querySelector("main").innerHTML =
+    "<h2>Thanks</h2><p>You declined the research permissions. No optional location or camera snapshot was submitted.</p>";
+};
+</script>
+</body>
+</html>
